@@ -167,7 +167,6 @@ list<-read.csv("Meta-analysis_list_08.09.csv", header = TRUE,  sep = ",")%>%
                                   if_else(str_detect(Article_source, "Scopus", negate = FALSE)| str_detect(Article_source, "Landscape Structure", negate = FALSE), "Scopus_Web",
                                           if_else(str_detect(Article_source, "From references", negate = FALSE)|str_detect(Article_source, "From table", negate = FALSE) , "references",
                                                   Article_source))))
-df_status(list)
 
 meta <- read.csv("Meta-analysis biodiversity data_08.09.csv", header = TRUE,  sep = ",")%>%
   rename("ID"="ï..ID")%>%
@@ -313,7 +312,6 @@ filter(Comparison_class != "Natural", Comparison_class != "NA - exclude")%>%
   full_join(y=landscape_data, by= c("Landscape_ID" = "Landscape_"))%>%
   filter(!is.na(ID))
   
-names(data)  
 ###clean data###
 names(data)[1]<-"ID"
 data[data=="ND"] <- "nd"
@@ -334,53 +332,7 @@ data_T<- data %>% subset(Comparison_class == "Diversified") %>%
 data_C<- data %>% subset(Comparison_class == "Simplified") %>% ##I need to decide if I will include NA - exclude##
   rename(Comparison_ID_C = Comparison_ID, mean_C = B_value, SD_C = B_SD_recal, N_samples_C = N_samples)
 
-##############################################################################################################
-##Caclulate the number of observations per abundance and species richness (before stablish the full_join)
-##Get the studies that have only one agricultural system
-X<- anti_join(data_T, data_C, by= "ID")
-sort(unique(X$ID))
-
-##Filtrate the studies that have only one agricultural system
-data_2 <- data%>% filter(ID != "1135" & ID !="1153" & ID != "1168"& ID != "152"& ID !=  "237"&
-                           ID !=  "287"  & ID !="329" & ID != "330" & ID != "361"& ID != "573" & 
-                           ID != "574"& ID != "582" & ID !="583" & ID != "91")
-length(sort(unique(data_2$ID))) ## number of total included studies
-addmargins(table(data_2$B_measure)) # number of individual observations per abundance and species richness
-addmargins(table(data_2$Data_entry, data_2$B_measure)) #number of observations per recorded person
-abun_data_2<-data_2%>%filter(B_measure == "Abundance")
-rich_data_2<-data_2%>%filter(B_measure == "Species Richness")
-length(sort(unique(abun_data_2$Lat))) #number of geographic points per abundance
-length(sort(unique(rich_data_2$Lat))) #number of geographic points per species richness
-length(sort(unique(data_2$Lat))) #total number of geographic points
-
-names(data_2)
-sort(unique(data_2$System_raw))
-
-write.csv(data_2, "Data_2_06_23.csv")
-
-##########################################################################################################
-#PRUEBA PARA SABER SI TODOS LOS MATCHES SE CUMPLEN O NO
-data_2_T<- data_2 %>% subset(Comparison_class == "Diversified") %>% 
-  rename(Comparison_ID_T = Comparison_ID, mean_T = B_value, SD_T = B_SD_recal, N_samples_T = N_samples)
-data_2_T$Matches <- 1:nrow(data_2_T) #add a new column with the effect size ID number
-
-data_2_C<- data_2 %>% subset(Comparison_class == "Simplified") %>% ##I need to decide if I will include NA - exclude##
-  rename(Comparison_ID_C = Comparison_ID, mean_C = B_value, SD_C = B_SD_recal, N_samples_C = N_samples)
-data_2_C$Matches <- 1:nrow(data_2_C) #add a new column with the effect size ID number
-
-data_2_MA<- full_join(x = data_2_T, y= data_2_C, by = c("Effect_ID", "Taxa", "Taxa_details","Taxa_Class",
-                                                        "Functional_group", "FG_recla", "Experiment_stage",
-                                                        "B_measure", "Country", "Year", "Continent"), 
-                      suffix = c("_T", "_C"))%>%
-  filter(!is.na(ID_C))%>%
-  filter(!is.na(ID_T))
-
-antiJoin_T<- anti_join(data_2_T,data_2_MA, by= c("Matches"="Matches_T" ))
-
-###########################################################################################################
-
 ##Data table with the format to run the meta-analysis T vs C##
-##Filter the mean_T and C = 0, because log response ration cant be calculated with values = to 0###
 data_MA <- full_join(x = data_T, y= data_C, by = c("Effect_ID", "Taxa", "Taxa_details","Taxa_Class",
                                                    "Functional_group", "Taxa_group", "FG_recla", "Experiment_stage",
                                                    "B_measure", "Country", "Year", "Continent"), 
@@ -398,22 +350,6 @@ data_MA <- full_join(x = data_T, y= data_C, by = c("Effect_ID", "Taxa", "Taxa_de
          arable_percentage_mean = round(arable_percentage_mean, digits = 0),
          density_patches_natural_mean = round(density_patches_natural_mean, digits = 0),
          min_distance_mean = round(min_distance_mean, digits = 0))
-
-
-df_status(data_MA)
-sort(unique(data_MA$density_patches_natural_mean))
-
-length(sort(unique(data_MA$ID_T))) ## number of total included studies
-addmargins(table(data_MA$B_measure)) #number of matched observations per abundance and species richness
-sort(unique(data_MA$"Taxa_details"))
-names(data_MA)
-
-
-###To check
-y<- anti_join(data_2, data_MA, by = c("ID" = "ID_C"))
-
-sort(unique(y$Effect_ID))
-length(sort(unique(data_MA$ID_C))) ## number of total included studies
 
 ###To use the log response ratio the sqrt((N_samples_C*mean_C)/SD_C) should be ~ 3 (Hedges et al. 1999)
 length(which(data_MA$prueba_logRR_C > 3))/length(data_MA$prueba_logRR_C)
@@ -439,9 +375,6 @@ effectsize_logRR <- escalc(measure = "ROM", m1i= mean_T, m2i= mean_C, sd1i= SD_T
          min_log_distance_mean = log(min_distance_mean+1)) #add a new column with the log min distance
 
 hist(effectsize_logRR$LRR) ##Frequency of Effect sizes##
-
-addmargins(table(effectsize_logRR$B_measure)) #number of matched observations per abundance and species richness after exclude the rows with variance = 0
-sort(unique(effectsize_logRR$Taxa_details))
 
 ##SUBSET DATA ABUNDANCE (with ES = log response ratio calculated)
 abundance_logRR <- effectsize_logRR %>% subset(B_measure == "Abundance")
@@ -472,10 +405,14 @@ length(sort(unique(effectsize_logRR$ID_C))) ## number of total included studies
 length(sort(unique(abundance_logRR$ID_C))) ## number of inclued studies for abundance studies
 length(sort(unique(richness_logRR$ID_C))) ## number of inclueded studies for richness studies
 
-# Appendix B2. Reference list of the included studies
-
 # Appendix B3. Number of excluded studies and the reason of exclusion
+firstup <- function(x) {
+  substr(x, 1, 1) <- toupper(substr(x, 1, 1))
+  x
+}
+
 excluded<- anti_join(list, effectsize_logRR, by= c("ID" ="ID_C"))%>%
+  mutate(Title = firstup(Title))%>%
   mutate(Exclusion_reason_recla = if_else(Exclusion_reason == "Management system comparison only" | Exclusion_reason ==  "Effect on yield only" | Exclusion_reason == "Cropping system description only" | Exclusion_reason == "Compare one plant species in different settings", "Not compare biodiversity",
                                           if_else(Exclusion_reason == "No comparison" | Exclusion_reason == "Compare natural vs. monoculture" | Exclusion_reason == "Unsuitable reference system used", "Not compare simplifiedd vs diversified",
                                                   if_else(Exclusion_reason == "Compare forest plantations" | Exclusion_reason == "Natural land comparison only", "Forest plantation or natural land",
@@ -512,6 +449,26 @@ excluded<- anti_join(list, effectsize_logRR, by= c("ID" ="ID_C"))%>%
                                                                                                                                                 if_else(Exclusion_reason_recla == "Mean<0", 16,
                                                                                                                                                         0)))))))))))))))))
 addmargins(table(excluded$exclusion_ID)) #reason of exclusion
+
+# Appendix B4.	List of excluded studies 
+write.csv(excluded, "Excluded_studies_08.16.csv")
+
+###### DATA EXTRACTION
+# Appendix C4.	Details of the individual observations recorded and the responsible of recording them.
+included<- data_MA%>%select(ID_T)%>%group_by(ID_T)%>%summarise()
+data_2<- right_join(x=data, y=included, by=c("ID" = "ID_T"))#%>%filter(B_measure =="Species Richness")
+length(unique(data_2$Lat)) #number of geographic points
+addmargins(table(data_2$B_measure)) ##number of individual observations extracted by biodiversity measure
+addmargins(table(data_2$Data_entry, data_2$B_measure)) #Recorded persons
+
+###### DATA PREPARATION FOR THE ANALYSIS
+#Before filtering variance = 0
+length(which(data_MA$B_measure == "Abundance"))#number effect sizes for abundance
+length(which(data_MA$B_measure == "Species Richness"))#number effect sizes for species richness
+
+#After filtering variance = 0
+length(abundance_logRR$B_measure)#number effect sizes for abundance
+length(richness_logRR$B_measure)#number effect sizes for species richness
 
 
 #---------------------------##########  META-ANALYSIS ################----------------------------------------------------#
@@ -1006,8 +963,6 @@ summary(abun.arable_percentage, digits=5)
 abun.arable_percentage.FG <- rma.mv(y=LRR, V=LRR_var, mods = ~ (arable_percentage_mean*FG_recla), random = list(~ 1 | ES_ID, ~ 1 | ID_C), 
                                     tdist=TRUE, data=abundance_logRR, method="REML")
 summary(abun.arable_percentage.FG, digits=5)
-
-
 
 #Results meta-regression
 coef(summary(abun.arable_percentage))%>%
@@ -1798,12 +1753,6 @@ preds.richness.distance<-as.data.frame(preds.richness.distance)
 richness.log_distance <- rma.mv(y=LRR, V=LRR_var, mods = ~min_log_distance_mean, random = list(~ 1 | ES_ID, ~ 1 | ID_C), 
                                 tdist=TRUE, data=richness_logRR, method="REML")
 summary(richness.log_distance, digits=4)
-
-data=richness_logRR
-
-richness.log_distance_FG <- rma.mv(y=LRR, V=LRR_var, mods = ~(min_log_distance_mean*FG_recla), random = list(~ 1 | ES_ID, ~ 1 | ID_C), 
-                                   tdist=TRUE, data=richness_logRR, method="REML")
-summary(richness.log_distance_FG, digits=4)
 
 #Calulate the residuals from the metaregression model using distance in log10
 rs.richness.log_distance<-rstandard.rma.mv(richness.log_distance, type="rstandard")
