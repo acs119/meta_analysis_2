@@ -155,17 +155,24 @@ CI_SD<- function (a, b) {
 }
 
 ### Complete data set and list dataset ##
-list<-read.csv("Meta-analysis_list_07.25.csv", header = TRUE,  sep = ",")%>%
-  rename("ID"="?..ID",
+list<-read.csv("Meta-analysis_list_08.09.csv", header = TRUE,  sep = ",")%>%
+  rename("ID"="ï..ID",
          "Exclusion_reason" = "Database.local...exclusion.reason", 
          "Inclusion_yes_no" = "Database.local...included...Yes.No.To.do.")%>%
   filter(Exclusion_reason != "Duplicate")%>% ##exclude duplicate studies
   filter(Article_source != "From google scholar search")%>% ##exclude the study included using google scholar search
-  subset(!is.na(ID))%>%mutate(Title = str_to_lower(Title, locale = "en"))
+  subset(!is.na(ID))%>%mutate(Title = str_to_lower(Title, locale = "en"))%>%
+  mutate(ID = as.character(ID),
+         Article_source = if_else(str_detect(Article_source, "Beillouin et al", negate = FALSE), "meta_analysis", 
+                                  if_else(str_detect(Article_source, "Scopus", negate = FALSE)| str_detect(Article_source, "Landscape Structure", negate = FALSE), "Scopus_Web",
+                                          if_else(str_detect(Article_source, "From references", negate = FALSE)|str_detect(Article_source, "From table", negate = FALSE) , "references",
+                                                  Article_source))))
+df_status(list)
 
-meta <- read.csv("Meta-analysis biodiversity data_07.17.csv", header = TRUE,  sep = ",")
-names(meta)
-
+meta <- read.csv("Meta-analysis biodiversity data_08.09.csv", header = TRUE,  sep = ",")%>%
+  rename("ID"="ï..ID")%>%
+  mutate(ID= as.character(ID))
+  
 ###Join the meta-analysis list (year of publication);
 data<- right_join(x= meta, y=list, by="ID")%>%
   filter(!is.na(Comparison_ID))%>%
@@ -292,10 +299,10 @@ filter(Comparison_class != "Natural", Comparison_class != "NA - exclude")%>%
                                       if_else(B_error_measure == "median,iqr", (M_IQR_SD),
                                               if_else(B_error_measure == "confidence intervals", (CI_SD),
                                                       (B_error_value)))))) %>%
+  mutate(Experiment_stage = if_else(ID == "733", "1", Experiment_stage))%>%
   ##Create a new colum with the identification of every row to join the observations (simplified vs diversified)
   mutate(Effect_ID = paste(ID, Taxa, Taxa_details, Taxa_Class, Functional_group, 
                            FG_recla, B_measure, Experiment_stage, Country, Continent,sep="_"))%>%
-  
   ##Create a new colum with the identification of every row for the landscape complexity analysis
   mutate(Landscape_ID= paste(ID, Country, Continent, Lat, Long, sep="_"))%>%
   subset(FG_recla != "others")%>% ##Filter Functional groups recla= OTHERS
@@ -305,7 +312,8 @@ filter(Comparison_class != "Natural", Comparison_class != "NA - exclude")%>%
   ###Join landscape data
   full_join(y=landscape_data, by= c("Landscape_ID" = "Landscape_"))%>%
   filter(!is.na(ID))
-
+  
+names(data)  
 ###clean data###
 names(data)[1]<-"ID"
 data[data=="ND"] <- "nd"
@@ -316,7 +324,6 @@ data[data==""] <- NA
 data[data=="."] <- NA
 data[data=="N/A"] <- NA
 data[data=="#N/A"] <- NA
-
 
 #-----------------------------------## DATABASE META-ANALYSIS -----------------------------------------------------------------#
 ###Subset data by Comparison_class (i.e., simplified and diversified systems)
@@ -391,6 +398,8 @@ data_MA <- full_join(x = data_T, y= data_C, by = c("Effect_ID", "Taxa", "Taxa_de
          arable_percentage_mean = round(arable_percentage_mean, digits = 0),
          density_patches_natural_mean = round(density_patches_natural_mean, digits = 0),
          min_distance_mean = round(min_distance_mean, digits = 0))
+
+
 df_status(data_MA)
 sort(unique(data_MA$density_patches_natural_mean))
 
@@ -427,8 +436,7 @@ effectsize_logRR <- escalc(measure = "ROM", m1i= mean_T, m2i= mean_C, sd1i= SD_T
          SD_T, natural_percentage_mean, arable_percentage_mean, density_patches_natural_mean, min_distance_mean,
          LRR, LRR_var, LRR_se)%>%
   mutate(Year = as.numeric(Year),
-         min_log_distance_mean = log(min_distance_mean+1))%>%#add a new column with the log min distance
-  filter(FG_recla == "autotrophs")
+         min_log_distance_mean = log(min_distance_mean+1)) #add a new column with the log min distance
 
 hist(effectsize_logRR$LRR) ##Frequency of Effect sizes##
 
@@ -439,7 +447,6 @@ sort(unique(effectsize_logRR$Taxa_details))
 abundance_logRR <- effectsize_logRR %>% subset(B_measure == "Abundance")
 abundance_logRR$ES_ID <- as.numeric(1:nrow(abundance_logRR)) #add a new column with the effect size ID number
 hist(abundance_logRR$LRR) ##Frequency of ES##
-names(abundance_logRR)
 
 ##SUBSET DATA SPECIES RICHNESS (with ES = log response ratio calculated)
 richness_logRR <- effectsize_logRR %>% subset(B_measure == "Species Richness")
@@ -452,10 +459,60 @@ hist(richness_logRR$LRR) ##Frequency of ES##
 addmargins(table(abundance_logRR$Taxa_group, abundance_logRR$FG_recla))
 addmargins(table(abundance_logRR$FG_recla, abundance_logRR$Continent))
 
-##Number of studies: total, species richness and abundance##
+##################################################################################################################
+###### LITERATURE SEARCH
+# Details of the search process of studies with the potential to be included in the meta-analysis
+addmargins(table(list$Article_source))
+
+###### STUDY SELECTION 
+# Appendix B1. Number of included and excluded studies after the selection process
+length(sort(unique(list$ID))) ## number of total studies with potential to be included
+(length(sort(unique(list$ID)))-length(sort(unique(effectsize_logRR$ID_C)))) ## number of excluded studies
 length(sort(unique(effectsize_logRR$ID_C))) ## number of total included studies
-length(sort(unique(abundance_logRR$ID_C))) ## number of abundance studies
-length(sort(unique(richness_logRR$ID_C))) ## number of richness studies
+length(sort(unique(abundance_logRR$ID_C))) ## number of inclued studies for abundance studies
+length(sort(unique(richness_logRR$ID_C))) ## number of inclueded studies for richness studies
+
+# Appendix B2. Reference list of the included studies
+
+# Appendix B3. Number of excluded studies and the reason of exclusion
+excluded<- anti_join(list, effectsize_logRR, by= c("ID" ="ID_C"))%>%
+  mutate(Exclusion_reason_recla = if_else(Exclusion_reason == "Management system comparison only" | Exclusion_reason ==  "Effect on yield only" | Exclusion_reason == "Cropping system description only" | Exclusion_reason == "Compare one plant species in different settings", "Not compare biodiversity",
+                                          if_else(Exclusion_reason == "No comparison" | Exclusion_reason == "Compare natural vs. monoculture" | Exclusion_reason == "Unsuitable reference system used", "Not compare simplifiedd vs diversified",
+                                                  if_else(Exclusion_reason == "Compare forest plantations" | Exclusion_reason == "Natural land comparison only", "Forest plantation or natural land",
+                                                          Exclusion_reason))))%>%
+  ##Studies excluded because did not analysed Abundance or Richness
+  mutate(Exclusion_reason_recla =if_else(ID == "1038" |ID == "107" |ID == "1135"|ID == "1137"|ID == "1142"|ID == "1150" |ID =="128"|ID ==  "136"|ID ==  "1361"|ID == "1393" |ID =="1398"|ID == "1505"|ID == "153" |ID == "204" |ID == "250" 
+                                         |ID == "299" |ID == "356" |ID == "402" |ID == "426" |ID == "429"|ID ==  "430" |ID == "431"  |ID =="535"|ID ==  "544"|ID ==  "549" |ID == "55" |ID ==  "561" |ID == "586"|ID ==  "594" 
+                                         |ID =="61" |ID ==  "690", "Not abundance or richness",
+                                         ##Studies excluded becaused did not compared simplified vs diversified
+                                         if_else(ID =="1153" | ID =="1168" |ID =="1287" |ID =="1391" |ID =="147" |ID == "151" |ID == "152" |ID == "169" |ID == "237"|ID ==  "274" |ID == "329"  |ID =="330"|ID ==  "331" |ID =="568" 
+                                                 |ID == "573" |ID == "574" |ID == "583" |ID == "587" |ID == "606" |ID == "609" |ID == "611"  |ID =="613" |ID == "78"  |ID == "91" |ID == "244"|ID == "283"|ID == "287"| ID =="694"|ID =="697"|ID =="1073"|ID =="1076"|ID =="1083"|ID =="582","Not compare simplifiedd vs diversified",
+                                                 ##Studies excluded becaused was not possible classify by functional group
+                                                 if_else(ID =="1098" |ID =="290" |ID =="61" |ID =="693" |ID =="703"|ID == "125"|ID =="705"|ID =="365", "Not functional group",
+                                                         ##Study excluded because of the lack of coordinate points
+                                                         if_else(ID == "486", "Missing data", 
+                                                                 ##Study excluded because the biodiversity mean was less than 0
+                                                                 if_else(ID == "361", "Mean<0", Exclusion_reason_recla))))))%>%
+  ##Put a different number to every exclusion reason
+  mutate(exclusion_ID = if_else(Exclusion_reason_recla == "Unpublished studies", 1,
+                                if_else(Exclusion_reason_recla == "Unavailable study", 2,
+                                        if_else(Exclusion_reason_recla == "Not English", 3,
+                                                if_else(Exclusion_reason_recla == "Secondary data", 4,
+                                                        if_else(Exclusion_reason_recla == "It's a meta-analysis or review", 5,
+                                                                if_else(Exclusion_reason_recla == "Qualitative ", 6,
+                                                                        if_else(Exclusion_reason_recla == "Not compare biodiversity", 7,
+                                                                                if_else(Exclusion_reason_recla == "Not abundance or richness",8,
+                                                                                        if_else(Exclusion_reason_recla == "Not compare simplifiedd vs diversified", 9,
+                                                                                                if_else(Exclusion_reason_recla == "Different Output ", 10,
+                                                                                                        if_else(Exclusion_reason_recla =="Forest plantation or natural land", 11,
+                                                                                                                if_else(Exclusion_reason_recla == "Not functional group", 12,
+                                                                                                                        if_else(Exclusion_reason_recla =="No conducted in the field" , 13,
+                                                                                                                                if_else(Exclusion_reason_recla == "Missing data", 14,
+                                                                                                                                        if_else(Exclusion_reason_recla == "Irrelevant ", 15,
+                                                                                                                                                if_else(Exclusion_reason_recla == "Mean<0", 16,
+                                                                                                                                                        0)))))))))))))))))
+addmargins(table(excluded$exclusion_ID)) #reason of exclusion
+
 
 #---------------------------##########  META-ANALYSIS ################----------------------------------------------------#
 #####Equation: Cheung (2014) Formula to calculate the estimate sampling variance (formula 14)####
@@ -2014,65 +2071,6 @@ abline(v = 2)
 ###Entry data: Calculate how many observations I recorded
 addmargins(table(data$Data_entry))
 
-################################ STUDY SELECTION PROCESS #######################################################################
-##Calculate the number of studies that were excluded in the first step (excluded from Montpellier and my meta-analysis)
-##Re-classify the reason of exclusion
-excluded<- list%>%
-  mutate(Exclusion_reason_recla = if_else(Exclusion_reason == "Management system comparison only" | Exclusion_reason ==  "Effect on yield only" | Exclusion_reason == "Cropping system description only" | Exclusion_reason == "Compare one plant species in different settings", "Not compare biodiversity",
-                                          if_else(Exclusion_reason == "No comparison" | Exclusion_reason == "Compare natural vs. monoculture" | Exclusion_reason == "Unsuitable reference system used", "Not compare simplifiedd vs diversified",
-                                                  if_else(Exclusion_reason == "Compare forest plantations" | Exclusion_reason == "Natural land comparison only", "Forest plantation or natural land",
-                                                          if_else(Exclusion_reason == "", "Included",
-                                                                  Exclusion_reason)))))%>%
-  ##Studies excluded because did not analysed Abundance or Richness
-  mutate(Exclusion_reason_recla =if_else(ID == "1038" |ID == "107" |ID == "1135"|ID == "1137"|ID == "1142"|ID == "1150" |ID =="128"|ID ==  "136"|ID ==  "1361"|ID == "1393" |ID =="1398"|ID == "1505"|ID == "153" |ID == "204" |ID == "250" 
-                                         |ID == "299" |ID == "356" |ID == "402" |ID == "426" |ID == "429"|ID ==  "430" |ID == "431"  |ID =="535"|ID ==  "544"|ID ==  "549" |ID == "55" |ID ==  "561" |ID == "586"|ID ==  "594" 
-                                         |ID =="61" |ID ==  "690", "Not abundance or richness",
-                                         ##Studies excluded becaused did not compared simplified vs diversified
-                                         if_else(ID =="1153" | ID =="1168" |ID =="1287" |ID =="1391" |ID =="147" |ID == "151" |ID == "152" |ID == "169" |ID == "237"|ID ==  "274" |ID == "329"  |ID =="330"|ID ==  "331" |ID =="568" 
-                                                 |ID == "573" |ID == "574" |ID == "583" |ID == "587" |ID == "606" |ID == "609" |ID == "611"  |ID =="613" |ID == "78"  |ID == "91" |ID == "244"|ID == "283"|ID == "287","Not compare simplifiedd vs diversified",
-                                                 ##Studies excluded becaused was not possible classify by functional group
-                                                 if_else(ID =="1098" |ID =="290" |ID =="61" |ID =="693" |ID =="703", "Not functional group",
-                                                         ##Study excluded because of the lack of coordinate points
-                                                         if_else(ID == "486", "Missing data", 
-                                                                 ##Study excluded because the biodiversity mean was less than 0
-                                                                 if_else(ID == "361", "Mean<0", Exclusion_reason_recla))))))%>%
-  #Re-classify the inclusion collumn by YES or NO
-  mutate(Inclusion_yes_no_recla = if_else(Inclusion_yes_no == "No\n"| Inclusion_yes_no == "To do? Figure 2 did not specify the meaning of the error bars", "No",
-                                          if_else(Inclusion_yes_no == "Yes\n", "Yes", Inclusion_yes_no)))%>%
-  ##Put a different number to every exclusion reason
-  mutate(exclusion_ID = if_else(Exclusion_reason_recla == "Unpublished studies", 1,
-                                if_else(Exclusion_reason_recla == "Unavailable study", 2,
-                                        if_else(Exclusion_reason_recla == "Not English", 3,
-                                                if_else(Exclusion_reason_recla == "Secondary data", 4,
-                                                        if_else(Exclusion_reason_recla == "It's a meta-analysis or review", 5,
-                                                                if_else(Exclusion_reason_recla == "Qualitative ", 6,
-                                                                        if_else(Exclusion_reason_recla == "Not compare biodiversity", 7,
-                                                                                if_else(Exclusion_reason_recla == "Not abundance or richness",8,
-                                                                                        if_else(Exclusion_reason_recla == "Not compare simplifiedd vs diversified", 9,
-                                                                                                if_else(Exclusion_reason_recla == "Different Output ", 10,
-                                                                                                        if_else(Exclusion_reason_recla =="Forest plantation or natural land", 11,
-                                                                                                                if_else(Exclusion_reason_recla == "Not functional group", 12,
-                                                                                                                        if_else(Exclusion_reason_recla =="No conducted in the field" , 13,
-                                                                                                                                if_else(Exclusion_reason_recla == "Missing data", 14,
-                                                                                                                                        if_else(Exclusion_reason_recla == "Irrelevant ", 15,
-                                                                                                                                                if_else(Exclusion_reason_recla == "Mean<0", 16,
-                                                                                                                                                        if_else(Exclusion_reason_recla == "Included", 17,
-                                                                                                                                                                0))))))))))))))))))%>%
-  #Reclassify the source of the studies
-  mutate(Article_source_recla = if_else(Article_source == "Beillouin et al (2019) meta analysis - MA_B6 Bowles et al. 2017" | Article_source == "Beillouin et al (2019) meta analysis - MA_C2 Chaplin-Kramer et al. 2011" |Article_source == "Beillouin et al (2019) meta analysis - MA_C7 Craven et al. 2016" |Article_source == "Beillouin et al (2019) meta analysis - MA_D1 Coutinho et al. 2019"
-                                        |Article_source == "Beillouin et al (2019) meta analysis - MA_D2 Dassou et al. 2016"  |Article_source == "Beillouin et al (2019) meta analysis - MA_D3 De Beenhouwer et al. 2013" |Article_source == "Beillouin et al (2019) meta analysis - MA_G2 Garibaldi et al. 2011" |Article_source == "Beillouin et al (2019) meta analysis - MA_G2 Garibaldi et al. 2011 - MA_ID622 Ricketts et al. 2008"
-                                        |Article_source == "Beillouin et al (2019) meta analysis - MA_I2 Iverson et al. 2014" |Article_source ==  "Beillouin et al (2019) meta analysis - MA_K1 Kennedy et al. 2013" |Article_source == "Beillouin et al (2019) meta analysis - MA_K6 Koricheva et al. 2018" |Article_source == "Beillouin et al (2019) meta analysis - MA_L2 Letourneau et al. 2011"
-                                        |Article_source == "Beillouin et al (2019) meta analysis - MA_L3 Lichtenberg et al. 2017" |Article_source == "Beillouin et al (2019) meta analysis - MA_L4 Lori et al. 2017" |Article_source == "Beillouin et al (2019) meta analysis - MA_M7 McDaniel et al. 2014" |Article_source == "Beillouin et al (2019) meta analysis - MA_P7 McDaniel et al. 2014"                                 
-                                        |Article_source == "Beillouin et al (2019) meta analysis - MA_P8 PumariÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ±o et al. 2015" |Article_source == "Beillouin et al (2019) meta analysis - MA_R4 PumariÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ±o et al. 2015" |Article_source == "Beillouin et al (2019) meta analysis - MA_S2 Scheper et al. 2013" | Article_source == "Beillouin et al (2019) meta analysis - MA_S3 Shackelford et al. 2013"                              
-                                        |Article_source == "Beillouin et al (2019) meta analysis - MA_T5 Torralba et al. 2016" |Article_source == "Beillouin et al (2019) meta analysis - MA_V3 Venter et al. 2016" |Article_source == "Beillouin et al (2019) meta analysis - MA_W3 Winter et al. 2018", "from_meta_analysis",
-                                        if_else(Article_source == "From references in article 107"|Article_source == "From references in article 112"  |Article_source == "From references in article 13" |Article_source == "From references in article 13 - MA_ID127 Danielsen et al. 2009" |Article_source == "From references in article 18"|Article_source == "From references in article 30"|Article_source == "From references in article 34" |Article_source == "Landscape Structure search carried out by Natalia"
-                                                |Article_source == "From references in article 46"|Article_source == "From references in article 46 - MA_ID146 Gobbi and Fontaneto 2008" |Article_source == "From references in article 46 & Scopus search 4 June 2019" |Article_source == "From references in article 52"|Article_source == "From references in article 63" |Article_source == "From references in article 92" |Article_source =="From table 3 in article 160", "from_references",
-                                                if_else(Article_source == "Scopus & Web of Science search on 29 November 2019" |Article_source == "Scopus & Web of Science search on 29 November 2019 - MA_ID372 Katayama et al. 2019" |Article_source == "Scopus & Web of Science search on 29 November 2019 - MA_ID392 Beckmann et al. 2019" |Article_source == "Scopus search 4 June 2019"|Article_source == "Scopus search Jan 2019" |Article_source == "Scopus search Jan 2019 - MA_ID117 Cardinale et al. 2007"
-                                                        |Article_source == "Scopus search Jan 2019 - MA_ID77 Santos et al. 2019"|Article_source == "Scopus search Jan 2019 - MA_ID83 Gonthier et al. 2014"|Article_source == "Scopus search Jan 2019 & Scopus search 4 June 2019", "scopus_webofscience",
-                                                        "0"))))%>%
-  ##filter(exclusion_ID == "0")%>%
-  mutate(ID = as.character(ID))
-
 ##Excluded studies by exclusion criteria
 addmargins(table(excluded$exclusion_ID, excluded$Exclusion_reason_recla)) #reason of exclusion
 addmargins(table(excluded$Article_source_recla)) #source of studies
@@ -2260,10 +2258,6 @@ included<- effectsize_logRR%>%
   mutate(included = "included")%>%
   rename("ID" = "ID_T")
 
-references_beillouin<-read.csv("references_beillouin_07.24.csv", header = TRUE, sep = ",")%>%
-  select(4:31)
-references_others<- read.csv("references_others_07.24.csv", header = TRUE, sep = ",")%>%
-  select(2:29)
 
 references<- rbind(references_beillouin, references_others)%>%
   mutate(Title = str_to_lower(Title, locale = "en"))%>%
@@ -2284,13 +2278,15 @@ list[list==""] <- NA
 
 references<- list%>%mutate(ID= as.character(ID))%>%
   rename("Journal" = "Source.title..Please..make.sure.to.enter.this.correctly..we.needed.to.check.if.it.belongs.to.predatory.journals.")%>%
-  left_join(y=included, by="ID")%>%
+  anti_join(y=excluded, by="ID")%>%
   mutate(included = if_else(included == "included", "included","excluded"))%>%
   mutate(Title = firstup(Title),
          Authors = gsub(";", ",",Authors),
          Authors = gsub(" ", ", ", Authors),
          Authors = gsub(",+", ",", Authors),
-         Authors = gsub("([A-Z].)([A-Z].)", "\\1 \\2", Authors))%>%
+         #Authors = gsub("([A-Z].)([A-Z].)", "\\1 \\2", Authors),
+         Year = as.character(Year),
+         Year = paste("(",Year,")"))%>%
   # subset(included == "included")%>%
   mutate(reference_cite = if_else(!is.na(Volume)&is.na(Art_No)&!is.na(DOI), paste(Authors," ", Year, ". ", Title, ". ", Journal,". ",Volume,"(", Issue, ")", ", ", Page_start, "-", Page_end, ". ", "available from: ", DOI, ".", sep= ""),
                                   if_else(!is.na(Volume)&is.na(Art_No) & is.na(DOI), paste(Authors," ", Year, ". ", Title, ". ", Journal,". ",Volume,"(", Issue, ")", ", ", Page_start, "-", Page_end, ".", sep= ""), 
@@ -2301,44 +2297,4 @@ references<- list%>%mutate(ID= as.character(ID))%>%
          reference_cite = gsub("available", "Available", reference_cite))%>%
   select(ID, reference_cite)%>%
   filter(ID == 27)
-
-
-references
-names(references)
-
-
-
-
-df_status(list)
-
-
-
-names(references)  
-
-
-
-
-
-length(sort(unique(references$ID))) ## number of total included studies
-
-
-names(references)                                                                                                      
-
-#subset(included=="included")%>%
-
-df_status(references)
-
-
-
-
-names(references)
-names(references_others)
-
-
-
-
-
-
-##LIST OF EXCLUDED STUDIES
-
 
