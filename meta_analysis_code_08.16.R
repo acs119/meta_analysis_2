@@ -386,18 +386,12 @@ richness_logRR <- effectsize_logRR %>% subset(B_measure == "Species Richness")
 richness_logRR$ES_ID <- as.numeric(1:nrow(richness_logRR)) #add a new column with the effect size ID number
 hist(richness_logRR$LRR) ##Frequency of ES##
 
-### EFFECT SIZE DATABASE CHARACTERISTIC ####
-###Check if  I have more than one ES per study (TG, FG, AS, Country)##
-###Lopez-Lopez et al 2018 recomend to do this###
-addmargins(table(abundance_logRR$Taxa_group, abundance_logRR$FG_recla))
-addmargins(table(abundance_logRR$FG_recla, abundance_logRR$Continent))
-
 ##################################################################################################################
-###### LITERATURE SEARCH
+################################ LITERATURE SEARCH #################################################################3
 # Details of the search process of studies with the potential to be included in the meta-analysis
 addmargins(table(list$Article_source))
 
-###### STUDY SELECTION 
+################################ STUDY SELECTION ####################################################################3
 # Appendix B1. Number of included and excluded studies after the selection process
 length(sort(unique(list$ID))) ## number of total studies with potential to be included
 (length(sort(unique(list$ID)))-length(sort(unique(effectsize_logRR$ID_C)))) ## number of excluded studies
@@ -453,7 +447,7 @@ addmargins(table(excluded$exclusion_ID)) #reason of exclusion
 # Appendix B4.	List of excluded studies 
 write.csv(excluded, "Excluded_studies_08.16.csv")
 
-###### DATA EXTRACTION
+################################ DATA EXTRACTION ####################################################################33
 # Appendix C4.	Details of the individual observations recorded and the responsible of recording them.
 included<- data_MA%>%select(ID_T)%>%group_by(ID_T)%>%summarise()
 data_2<- right_join(x=data, y=included, by=c("ID" = "ID_T"))#%>%filter(B_measure =="Species Richness")
@@ -461,16 +455,187 @@ length(unique(data_2$Lat)) #number of geographic points
 addmargins(table(data_2$B_measure)) ##number of individual observations extracted by biodiversity measure
 addmargins(table(data_2$Data_entry, data_2$B_measure)) #Recorded persons
 
-###### DATA PREPARATION FOR THE ANALYSIS
-#Before filtering variance = 0
+################################ DATA PREPARATION FOR THE ANALYSIS ###############################################3
+# Before filtering variance = 0
 length(which(data_MA$B_measure == "Abundance"))#number effect sizes for abundance
 length(which(data_MA$B_measure == "Species Richness"))#number effect sizes for species richness
 
-#After filtering variance = 0
+# After filtering variance = 0
 length(abundance_logRR$B_measure)#number effect sizes for abundance
 length(richness_logRR$B_measure)#number effect sizes for species richness
 
+#####################################################################################################################
+#----------------------------------- DATA DESCRIPTION -----------------------------------------------------------------------
+# Temporal distribution of the studies
+studies_year<- effectsize_logRR%>%
+  group_by(ID_C, B_measure, Year)%>%
+  tally()%>%
+  group_by(B_measure, Year)%>%
+  mutate(studies_perYear = sum(n))%>%
+  mutate(studies_perYear = 1)%>%
+  group_by(B_measure, Year)%>%
+  mutate(studies_perYear = sum(studies_perYear))%>%
+  ungroup()%>%distinct(B_measure, Year, .keep_all = TRUE)%>%
+  group_by(B_measure)%>%
+  mutate(total= sum(studies_perYear))%>%
+  ungroup()%>%
+  mutate(percentage= ((studies_perYear/total)*100))%>%
+  mutate(Year= as.factor(Year))
 
+studies_year%>%group_by(B_measure, Year)%>%
+  mutate(between_2011_2019= if_else(Year == 2011| Year == 2012| Year == 2013| Year == 2014| Year == 2015| Year == 2016| Year == 2017| Year == 2018| Year == 2019, studies_perYear, 0),
+         between_2001_2010 = if_else(Year == 2001|Year == 2002|Year == 2003|Year == 2004|Year == 2005|Year == 2006|Year == 2007|Year == 2008|Year == 2009|Year == 2010, studies_perYear, 0),
+         between_1986_2000 = if_else(Year==1986 |Year==1987|Year== 1988 |Year==1992 |Year==1994|Year== 1998 |Year==1999 |Year==2000, studies_perYear, 0))%>%
+  group_by(B_measure)%>%mutate(total= mean(total),
+                               between_2011_2019= sum(between_2011_2019),
+                               between_2001_2010 = sum(between_2001_2010),
+                               between_1986_2000 = sum(between_1986_2000))%>%
+  ungroup()%>%distinct(B_measure, .keep_all = TRUE)%>%mutate(percentage_between_2011_2019= ((between_2011_2019/total)*100),
+                                                             percentage_between_2001_2010 = ((between_2001_2010/total)*100),
+                                                             percentage_between_1986_2000 = ((between_1986_2000/total)*100))
+
+sort(unique(studies_year$Year))
+
+#http://www.sthda.com/english/wiki/ggplot2-barplots-quick-start-guide-r-software-and-data-visualization#create-barplots
+
+figure_1 <- ggplot(studies_year, aes(x=Year, y= studies_perYear, fill=B_measure))+
+  geom_bar(stat="identity")+
+  scale_fill_manual(name = "Biodiversity measures", values=c("#686D35","#A63117"))+
+  scale_x_discrete(name ="Publication Year", breaks = c(1986, 1994,1995,2000,2005,2010,2015,2019))+
+  #scale_y_discrete(name ="Frequency (%)")
+  theme(
+    legend.position = c(0.25, 0.7),
+    legend.justification = c("center", "bottom"),
+    legend.direction = "vertical",
+    axis.text.x = element_text(color="#22211d",size=10,  family = "sans"),
+    axis.text.y = element_text(color="#22211d",size=10, family = "sans"),
+    text = element_text(color = "#22211d", size =11, face = "bold", family = "sans"),
+    legend.box.background = element_rect(color="#22211d", size=0.5),
+    legend.box.margin = margin(3, 3, 3, 3),
+    plot.background = element_rect(fill = "White", color = "White"), 
+    panel.background = element_rect(fill = "White", color = "White"), 
+    legend.background = element_rect(fill = "White", color = "White"),
+    axis.line = element_line(colour = "black"),
+    plot.title = element_text(size= 11, hjust=0.1, color = "#4e4d47", margin = margin(b = -0.1, t = 0.4, l = 2, unit = "cm")))+
+  labs(y = "Number of primary studies")
+figure_1
+
+#Global distribution of the data
+##https://www.datanovia.com/en/blog/how-to-create-a-map-using-ggplot2/
+require(maps)
+require(viridis)
+#library(magrittr)
+theme_set(
+  theme_void()
+)
+
+###Location of the studies (transform an cvs to shapefile)
+##https://datacarpentry.org/r-raster-vector-geospatial/10-vector-csv-to-shapefile-in-r/
+studies_location<- data_2 %>%
+  group_by(ID, B_measure, Country, Continent, Landscape_ID, Lat, Long) %>% tally()%>%
+  mutate(Lat= as.numeric(Lat),
+         Long= as.numeric(Long))
+length(sort(unique(studies_location$Country))) #total number of countries
+length(sort(unique(abundance_logRR$Country))) #number of countries for abundance
+length(sort(unique(richness_logRR$Country))) #number of countries for species richness
+length(sort(unique(studies_location$Continent))) #total number of continents
+
+### World map
+#https://www.datanovia.com/en/blog/how-to-create-a-map-using-ggplot2/
+world_map <- map_data("world")%>%filter(region != "Antarctica")
+
+ggplot(world_map, aes(x = long, y = lat, group = group)) +
+  geom_polygon(fill="lightgray", color = "black")
+
+## Global distribution of the study points
+#https://eriqande.github.io/rep-res-web/lectures/making-maps-with-R.html
+#Label: https://www.datanovia.com/en/blog/how-to-change-ggplot-labels/
+#Colors: https://color.adobe.com/search?q=tree
+figure_2<- ggplot() +
+  geom_polygon(data = world_map, aes(x = long, y = lat, group = group), fill="lightgray", color = "grey")+
+  geom_point(data = studies_location, mapping = aes(x=Long, y=Lat, color = B_measure), cex = 1.4, show.legend = TRUE)+
+  scale_color_manual(values = c("#686D35","#A63117"))+
+  labs(color = "Biodiversity measures") +
+  theme(
+    legend.position = c(0.62, 0.05),
+    legend.direction = "horizontal", 
+    legend.justification = c("center", "bottom"),
+    text = element_text(color = "#22211d", size =11, face = "bold", family = "sans"),
+    legend.box.background = element_rect(color="#22211d", size=0.5),
+    legend.box.margin = margin(6, 6, 6, 6),
+    plot.background = element_rect(fill = "White", color = "White"), 
+    panel.background = element_rect(fill = "White", color = "White"), 
+    legend.background = element_rect(fill = "White", color = "White"),
+    plot.title = element_text(size= 11, hjust=0.1, color = "#4e4d47", margin = margin(b = -0.1, t = 0.4, l = 2, unit = "cm")))
+figure_2
+
+##Number or studies and effect sizes by continent
+studies_per_continent<- effectsize_logRR%>%
+  mutate(Continent = if_else(Continent == "caribbean" | Continent =="central america"| 
+                               Continent =="south america", "Central and South America",
+                             if_else(Continent == "oceania", "Oceania",
+                                     if_else(Continent == "north america", "North America",
+                                             if_else(Continent== "europe", "Europe",
+                                                     if_else(Continent == "asia", "Asia",
+                                                             if_else(Continent == "africa", "Africa", Continent)))))))%>%
+  group_by(ID_T,B_measure, Continent)%>%
+  tally()%>%ungroup()%>%distinct(ID_T,B_measure, Continent, .keep_all = TRUE)%>%
+  group_by(B_measure, Continent)%>%
+  mutate(n_effectsizes = sum(n),
+         n_studies = length(ID_T), 
+         n_studies = mean(n_studies))%>%
+  ungroup()%>%distinct(B_measure, Continent, .keep_all = TRUE)%>%
+  mutate(n_effectsizes_parentheses = paste("(", n_effectsizes, ")", sep=""))
+
+figure_3<- ggplot(studies_per_continent, aes(x=Continent, y=n_studies, fill=B_measure))+
+  geom_bar(stat="identity", position=position_dodge())+
+  scale_fill_manual(name = "Biodiversity measures", values=c("#686D35","#A63117"))+
+  coord_flip()+
+  scale_y_continuous(name = "Number of studies", limits = c(0, 60)) +
+  geom_text(aes(label=n_effectsizes_parentheses), vjust= 0.5, position = position_dodge(0.9), 
+            color="Black", size=3.5, family="sans", hjust = -0.2)+
+  theme(
+    legend.position = c(0.79, 0.2),
+    legend.justification = c("center", "bottom"),
+    legend.direction = "vertical",
+    axis.text.x = element_text(color="#22211d",size=10,  family = "sans"),
+    axis.text.y = element_text(color="#22211d",size=10, family = "sans"),
+    text = element_text(color = "#22211d", size =11, face = "bold", family = "sans"),
+    legend.box.background = element_rect(color="#22211d", size=0.5),
+    legend.box.margin = margin(3, 3, 3, 3),
+    plot.background = element_rect(fill = "White", color = "White"), 
+    panel.background = element_rect(fill = "White", color = "White"), 
+    legend.background = element_rect(fill = "White", color = "White"),
+    axis.line = element_line(colour = "black"),
+    plot.title = element_text(size= 11, hjust=0.1, color = "#4e4d47", margin = margin(b = -0.1, t = 0.4, l = 2, unit = "cm")))+
+  labs(x= " ",y = "Number of studies", color = "#22211d", size =11, face = "bold", 
+       family = "sans")
+figure_3
+
+##Number of effect sizes grouped by biodiversity measures and functional groups
+studies_taxa<- effectsize_logRR %>%
+  group_by(B_measure, FG_recla, Taxa_group) %>%
+  summarise(n_studies = n_distinct(ID_C),
+            n_effectsizes = n_distinct(ES_ID))
+write.csv(studies_taxa, "studies_taxa_06.25.csv")
+
+#Number of studies and efect sizes by Taxa group
+effectsize_logRR %>%
+  group_by(B_measure, Taxa_group) %>%
+  summarise(n_studies = n_distinct(ID_C),
+            n_effectsizes = n_distinct(ES_ID))
+#Number of studies and effect sizes by functional groups
+effectsize_logRR %>%
+  group_by(B_measure, FG_recla) %>%
+  summarise(n_studies = n_distinct(ID_C),
+            n_effectsizes = n_distinct(ES_ID))
+
+###LIST OF INCLUDED STUDIES
+
+
+
+
+####################################################################################################################
 #---------------------------##########  META-ANALYSIS ################----------------------------------------------------#
 #####Equation: Cheung (2014) Formula to calculate the estimate sampling variance (formula 14)####
 #b= LRR_var
@@ -677,7 +842,7 @@ anova(abun.FG, abun.FG.modelnovar3)
 abun.FG.estimated.sampling.variance<- estimated.sampling.variance.func(abundance_logRR$LRR_var)
 
 #Sampling variance (Amount of variance at level 1)
-((abun.FG.estimated.sampling.variance)/(abun.FG.autotrophs$sigma2[1]+abun.FG.autotrophs$sigma2[2]+abun.FG.estimated.sampling.variance))*100
+((abun.FG.estimated.sampling.variance)/(abun.FG$sigma2[1]+abun.FG$sigma2[2]+abun.FG.estimated.sampling.variance))*100
 #Within-study variance (Amount of variance at level 2) (Functional groups)
 ((abun.FG$sigma2[1]) / (abun.FG$sigma2[1] + abun.FG$sigma2[2] + abun.FG.estimated.sampling.variance))*100
 #Between-study variance (Amount of variance at level 3) (Studies ID)
@@ -958,11 +1123,6 @@ abun.natural.estimated.sampling.variance<- estimated.sampling.variance.func(abun
 abun.arable_percentage <- rma.mv(y=LRR, V=LRR_var, mods = ~ arable_percentage_mean, random = list(~ 1 | ES_ID, ~ 1 | ID_C), 
                                  tdist=TRUE, data=abundance_logRR, method="REML")
 summary(abun.arable_percentage, digits=5)
-
-##Prueba por FG
-abun.arable_percentage.FG <- rma.mv(y=LRR, V=LRR_var, mods = ~ (arable_percentage_mean*FG_recla), random = list(~ 1 | ES_ID, ~ 1 | ID_C), 
-                                    tdist=TRUE, data=abundance_logRR, method="REML")
-summary(abun.arable_percentage.FG, digits=5)
 
 #Results meta-regression
 coef(summary(abun.arable_percentage))%>%
@@ -1840,7 +2000,7 @@ richness.log_distance.estimated.sampling.variance<- estimated.sampling.variance.
 ((richness.log_distance$sigma2[2]) / (richness.log_distance$sigma2[1] + richness.log_distance$sigma2[2] + richness.log_distance.estimated.sampling.variance))*100
 
 ##----Plot LANDSCAPE ANALYSIS
-preds.rich.log.distance <-predict(richness.natural_log.distance,newmods=c(0:8), addx=TRUE)
+preds.rich.log.distance <-predict(richness.log_distance,newmods=c(0:8), addx=TRUE)
 preds.rich.log.distance<-as.data.frame(preds.rich.log.distance)%>%
   rename("X.log.min_distance_mean" ="X.log.min_distance_mean.")
 preds.rich.log.distance
@@ -2016,25 +2176,8 @@ abline(h = 3)
 abline(v = 2)
 
 
-############################## DATA EXTRACTION PROCESS ##########################################################################
-###Entry data: Calculate how many observations I recorded
-addmargins(table(data$Data_entry))
 
-##Excluded studies by exclusion criteria
-addmargins(table(excluded$exclusion_ID, excluded$Exclusion_reason_recla)) #reason of exclusion
-addmargins(table(excluded$Article_source_recla)) #source of studies
-addmargins(table(excluded$Article_source_recla)) #recording person
-
-length(unique(excluded$ID))
-length(unique(meta$ID))
-length(unique(data_MA$ID_T))
-length(which(excluded$Article_source_recla == "nose"))
-sort(which(excluded$Article_source_recla == "nose"))
-y<- anti_join(effectsize_logRR, excluded, by = c("ID_C" = "ID"))
-sort(unique(excluded$Article_source))
-
-
-#----------------------------------- RESULTS DATA DESCRIPTION -----------------------------------------------------------------------
+#----------------------------------- DATA DESCRIPTION -----------------------------------------------------------------------
 
 ##Temporal distribution of the studies
 studies_year<- effectsize_logRR%>%
