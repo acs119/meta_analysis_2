@@ -481,11 +481,14 @@ studies_year<- effectsize_logRR%>%
   ungroup()%>%
   mutate(percentage= ((studies_perYear/total)*100))%>%
   mutate(Year= as.factor(Year))
+#if_else(str_detect(Article_source, "Beillouin et al", negate = FALSE), "meta_analysis"
+        
+df_status(studies_year)
 
 studies_year%>%group_by(B_measure, Year)%>%
-  mutate(between_2011_2019= if_else(Year == 2011| Year == 2012| Year == 2013| Year == 2014| Year == 2015| Year == 2016| Year == 2017| Year == 2018| Year == 2019, studies_perYear, 0),
-         between_2001_2010 = if_else(Year == 2001|Year == 2002|Year == 2003|Year == 2004|Year == 2005|Year == 2006|Year == 2007|Year == 2008|Year == 2009|Year == 2010, studies_perYear, 0),
-         between_1986_2000 = if_else(Year==1986 |Year==1987|Year== 1988 |Year==1992 |Year==1994|Year== 1998 |Year==1999 |Year==2000, studies_perYear, 0))%>%
+  mutate(between_2011_2019= if_else(str_detect(Year, "201", negate = FALSE), 1,0),
+         between_2001_2010 = if_else(str_detect(Year, "200", negate = FALSE), 1,0),
+         between_1986_2000 = if_else(str_detect(Year, "19", negate = FALSE), 1,0))%>%
   group_by(B_measure)%>%mutate(total= mean(total),
                                between_2011_2019= sum(between_2011_2019),
                                between_2001_2010 = sum(between_2001_2010),
@@ -493,6 +496,8 @@ studies_year%>%group_by(B_measure, Year)%>%
   ungroup()%>%distinct(B_measure, .keep_all = TRUE)%>%mutate(percentage_between_2011_2019= ((between_2011_2019/total)*100),
                                                              percentage_between_2001_2010 = ((between_2001_2010/total)*100),
                                                              percentage_between_1986_2000 = ((between_1986_2000/total)*100))
+
+
 
 sort(unique(studies_year$Year))
 
