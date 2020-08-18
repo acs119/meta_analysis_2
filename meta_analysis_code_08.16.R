@@ -464,7 +464,7 @@ length(which(data_MA$B_measure == "Species Richness"))#number effect sizes for s
 length(abundance_logRR$B_measure)#number effect sizes for abundance
 length(richness_logRR$B_measure)#number effect sizes for species richness
 
-#####################################################################################################################
+#################################### R E S U L T S #################################################################################
 #----------------------------------- DATA DESCRIPTION -----------------------------------------------------------------------
 # Temporal distribution of the studies
 studies_year<- effectsize_logRR%>%
@@ -480,30 +480,19 @@ studies_year<- effectsize_logRR%>%
   mutate(total= sum(studies_perYear))%>%
   ungroup()%>%
   mutate(percentage= ((studies_perYear/total)*100))%>%
-  mutate(Year= as.factor(Year))
-#if_else(str_detect(Article_source, "Beillouin et al", negate = FALSE), "meta_analysis"
-        
-df_status(studies_year)
-
-studies_year%>%group_by(B_measure, Year)%>%
-  mutate(between_2011_2019= if_else(str_detect(Year, "201", negate = FALSE), 1,0),
-         between_2001_2010 = if_else(str_detect(Year, "200", negate = FALSE), 1,0),
-         between_1986_2000 = if_else(str_detect(Year, "19", negate = FALSE), 1,0))%>%
-  group_by(B_measure)%>%mutate(total= mean(total),
-                               between_2011_2019= sum(between_2011_2019),
-                               between_2001_2010 = sum(between_2001_2010),
-                               between_1986_2000 = sum(between_1986_2000))%>%
-  ungroup()%>%distinct(B_measure, .keep_all = TRUE)%>%mutate(percentage_between_2011_2019= ((between_2011_2019/total)*100),
-                                                             percentage_between_2001_2010 = ((between_2001_2010/total)*100),
-                                                             percentage_between_1986_2000 = ((between_1986_2000/total)*100))
-
-
-
-sort(unique(studies_year$Year))
+  mutate(Year= as.factor(Year))%>%
+  group_by(B_measure, Year)%>%
+  mutate(between_2011_2019= if_else(str_detect(Year, "201", negate = FALSE),studies_perYear,0),
+         between_2001_2010 = if_else(str_detect(Year, "200", negate = FALSE), studies_perYear,0),
+         between_1986_2000 = if_else(str_detect(Year, "^19", negate = FALSE), studies_perYear,0))%>%
+  group_by(B_measure)%>%mutate(between_2010_2019= sum(between_2011_2019),
+                               between_2000_2009 = sum(between_2001_2010),
+                               between_1986_1999 = sum(between_1986_2000))%>%
+  ungroup()
 
 #http://www.sthda.com/english/wiki/ggplot2-barplots-quick-start-guide-r-software-and-data-visualization#create-barplots
 
-figure_1 <- ggplot(studies_year, aes(x=Year, y= studies_perYear, fill=B_measure))+
+appendix_H1 <- ggplot(studies_year, aes(x=Year, y= studies_perYear, fill=B_measure))+
   geom_bar(stat="identity")+
   scale_fill_manual(name = "Biodiversity measures", values=c("#686D35","#A63117"))+
   scale_x_discrete(name ="Publication Year", breaks = c(1986, 1994,1995,2000,2005,2010,2015,2019))+
@@ -523,12 +512,13 @@ figure_1 <- ggplot(studies_year, aes(x=Year, y= studies_perYear, fill=B_measure)
     axis.line = element_line(colour = "black"),
     plot.title = element_text(size= 11, hjust=0.1, color = "#4e4d47", margin = margin(b = -0.1, t = 0.4, l = 2, unit = "cm")))+
   labs(y = "Number of primary studies")
-figure_1
+appendix_H1
 
 #Global distribution of the data
 ##https://www.datanovia.com/en/blog/how-to-create-a-map-using-ggplot2/
-require(maps)
-require(viridis)
+library(tidyverse)
+library(maps)
+library(viridis)
 #library(magrittr)
 theme_set(
   theme_void()
@@ -540,14 +530,24 @@ studies_location<- data_2 %>%
   group_by(ID, B_measure, Country, Continent, Landscape_ID, Lat, Long) %>% tally()%>%
   mutate(Lat= as.numeric(Lat),
          Long= as.numeric(Long))
+  filter(B_measure == "Species Richness")%>%
+  filter(Continent == "africa")
 length(sort(unique(studies_location$Country))) #total number of countries
 length(sort(unique(abundance_logRR$Country))) #number of countries for abundance
 length(sort(unique(richness_logRR$Country))) #number of countries for species richness
 length(sort(unique(studies_location$Continent))) #total number of continents
+length(sort(unique(studies_location$Lat))) #total number of continents
+  sort(unique(studies_location$Country))
+sort(unique(studies_location$Continent))
 
 ### World map
 #https://www.datanovia.com/en/blog/how-to-create-a-map-using-ggplot2/
-world_map <- map_data("world")%>%filter(region != "Antarctica")
+remove.packages("maps")
+install.packages("maps")
+library(maps)
+world_map <- ggplot2::map_data("world")
+  map_data("world")
+filter(region != "Antartica")
 
 ggplot(world_map, aes(x = long, y = lat, group = group)) +
   geom_polygon(fill="lightgray", color = "black")
@@ -2269,7 +2269,7 @@ ggplot(world_map, aes(x = long, y = lat, group = group)) +
 #https://eriqande.github.io/rep-res-web/lectures/making-maps-with-R.html
 #Label: https://www.datanovia.com/en/blog/how-to-change-ggplot-labels/
 #Colors: https://color.adobe.com/search?q=tree
-figure_2<- ggplot() +
+figure_1<- ggplot() +
   geom_polygon(data = world_map, aes(x = long, y = lat, group = group), fill="lightgray", color = "grey")+
   geom_point(data = studies_location, mapping = aes(x=Long, y=Lat, color = B_measure), cex = 1.4, show.legend = TRUE)+
   scale_color_manual(values = c("#686D35","#A63117"))+
