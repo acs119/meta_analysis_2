@@ -542,12 +542,10 @@ sort(unique(studies_location$Continent))
 
 ### World map
 #https://www.datanovia.com/en/blog/how-to-create-a-map-using-ggplot2/
-remove.packages("maps")
-install.packages("maps")
 library(maps)
-world_map <- ggplot2::map_data("world")
-  map_data("world")
-filter(region != "Antartica")
+world_map <- ggplot2::map_data("world")%>%filter(region != "Antarctica")
+
+sort(unique(world_map$region))
 
 ggplot(world_map, aes(x = long, y = lat, group = group)) +
   geom_polygon(fill="lightgray", color = "black")
@@ -556,7 +554,7 @@ ggplot(world_map, aes(x = long, y = lat, group = group)) +
 #https://eriqande.github.io/rep-res-web/lectures/making-maps-with-R.html
 #Label: https://www.datanovia.com/en/blog/how-to-change-ggplot-labels/
 #Colors: https://color.adobe.com/search?q=tree
-figure_2<- ggplot() +
+figure_1<- ggplot() +
   geom_polygon(data = world_map, aes(x = long, y = lat, group = group), fill="lightgray", color = "grey")+
   geom_point(data = studies_location, mapping = aes(x=Long, y=Lat, color = B_measure), cex = 1.4, show.legend = TRUE)+
   scale_color_manual(values = c("#686D35","#A63117"))+
@@ -572,7 +570,7 @@ figure_2<- ggplot() +
     panel.background = element_rect(fill = "White", color = "White"), 
     legend.background = element_rect(fill = "White", color = "White"),
     plot.title = element_text(size= 11, hjust=0.1, color = "#4e4d47", margin = margin(b = -0.1, t = 0.4, l = 2, unit = "cm")))
-figure_2
+figure_1
 
 ##Number or studies and effect sizes by continent
 studies_per_continent<- effectsize_logRR%>%
@@ -592,7 +590,7 @@ studies_per_continent<- effectsize_logRR%>%
   ungroup()%>%distinct(B_measure, Continent, .keep_all = TRUE)%>%
   mutate(n_effectsizes_parentheses = paste("(", n_effectsizes, ")", sep=""))
 
-figure_3<- ggplot(studies_per_continent, aes(x=Continent, y=n_studies, fill=B_measure))+
+appendix_H2<- ggplot(studies_per_continent, aes(x=Continent, y=n_studies, fill=B_measure))+
   geom_bar(stat="identity", position=position_dodge())+
   scale_fill_manual(name = "Biodiversity measures", values=c("#686D35","#A63117"))+
   coord_flip()+
@@ -615,7 +613,7 @@ figure_3<- ggplot(studies_per_continent, aes(x=Continent, y=n_studies, fill=B_me
     plot.title = element_text(size= 11, hjust=0.1, color = "#4e4d47", margin = margin(b = -0.1, t = 0.4, l = 2, unit = "cm")))+
   labs(x= " ",y = "Number of studies", color = "#22211d", size =11, face = "bold", 
        family = "sans")
-figure_3
+appendix_H2
 
 ##Number of effect sizes grouped by biodiversity measures and functional groups
 studies_taxa<- effectsize_logRR %>%
